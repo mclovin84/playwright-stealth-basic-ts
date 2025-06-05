@@ -59,7 +59,10 @@ app.post('/generate-pdf', async (req, res) => {
   } catch (error) {
     console.error('PDF generation error:', error);
     if (browser) await browser.close();
-    res.status(500).json({ error: error.message });
+    
+    // TypeScript-safe error handling
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    res.status(500).json({ error: errorMessage });
   }
 });
 
