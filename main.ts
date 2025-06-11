@@ -1,6 +1,6 @@
 import express from 'express';
 import { chromium } from 'playwright';
-import * as archiver from 'archiver';
+import archiver from 'archiver';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
