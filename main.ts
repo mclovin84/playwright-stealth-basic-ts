@@ -1,5 +1,6 @@
 import express from 'express';
 import { chromium } from 'playwright';
+import * as archiver from 'archiver';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -16,8 +17,11 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'PDF Service Ready', 
-    endpoint: '/generate-pdf',
-    message: 'POST html content to /generate-pdf' 
+    endpoints: {
+      pdf: '/generate-pdf',
+      zip: '/create-zip'
+    },
+    message: 'POST html to /generate-pdf or pdfs array to /create-zip' 
   });
 });
 
@@ -63,6 +67,63 @@ app.post('/generate-pdf', async (req, res) => {
     // TypeScript-safe error handling
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     res.status(500).json({ error: errorMessage });
+  }
+});
+
+// ZIP creation endpoint
+app.post('/create-zip', async (req, res) => {
+  try {
+    console.log('ZIP endpoint called');
+    const { pdfs } = req.body;
+    
+    // Validate input
+    if (!pdfs || !Array.isArray(pdfs)) {
+      console.log('No PDFs array provided');
+      return res.status(400).json({ error: 'Please provide a pdfs array' });
+    }
+    
+    console.log(`Creating ZIP with ${pdfs.length} files`);
+    
+    // Set response headers for ZIP file
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="LOI_Batch.zip"');
+    
+    // Create ZIP archive
+    const archive = archiver('zip', { 
+      zlib: { level: 9 } // Maximum compression
+    });
+    
+    // Error handling
+    archive.on('error', (err: Error) => {
+      console.error('Archive error:', err);
+      return res.status(500).json({ error: 'Failed to create ZIP' });
+    });
+    
+    // Pipe the archive to response
+    archive.pipe(res);
+    
+    // Add each PDF to archive
+    pdfs.forEach((pdf: { data: string; filename?: string }, index: number) => {
+      try {
+        const buffer = Buffer.from(pdf.data, 'base64');
+        const filename = pdf.filename || `LOI_${index + 1}.pdf`;
+        archive.append(buffer, { name: filename });
+        console.log(`Added ${filename} to ZIP`);
+      } catch (err) {
+        console.error(`Error adding file ${index}:`, err);
+      }
+    });
+    
+    // Finalize the archive
+    await archive.finalize();
+    console.log('ZIP created successfully');
+    
+  } catch (error) {
+    console.error('ZIP creation error:', error);
+    if (!res.headersSent) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create ZIP';
+      res.status(500).json({ error: errorMessage });
+    }
   }
 });
 
